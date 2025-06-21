@@ -210,7 +210,7 @@ jobs:
           echo "Please review and approve to publish the theme live on production." >> $GITHUB_STEP_SUMMARY
           echo "- **Production Store**: https://$PRODUCTION_STORE" >> $GITHUB_STEP_SUMMARY
 
-  # Job 5: Publish Theme Live on Production
+ # Job 5: Publish Theme Live on Production
   publish-production:
     name: Publish Live on Production
     runs-on: ubuntu-latest
@@ -270,3 +270,53 @@ jobs:
           # List all deploy themes for debugging
           echo "All unpublished deploy themes (sorted by ID descending):"
           shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r '.[] | select(.role == "unpublished" and (.name | startswith("deploy-"))) | "\(.id): \(.name)"' | sort -nr
+
+      # THIS IS THE MISSING STEP - ACTUALLY PUBLISH THE THEME
+      - name: Publish theme live
+        env:
+          SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_PRODUCTION_TOKEN }}
+          SHOPIFY_STORE: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}
+        run: |
+          THEME_ID="${{ steps.get-theme.outputs.theme_id }}"
+          THEME_NAME="${{ steps.get-theme.outputs.theme_name }}"
+          
+          echo "Publishing theme ID: $THEME_ID ($THEME_NAME) to live..."
+          
+          # Publish the theme live
+          shopify theme publish --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --theme=$THEME_ID --force
+          
+          echo "✅ Theme successfully published live!"
+          echo "Theme ID $THEME_ID is now the live theme on production store"
+
+      - name: Create final deployment summary
+        env:
+          PRODUCTION_STORE: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}
+        run: |
+          echo "## 🎉 Production Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "- **Store**: https://$PRODUCTION_STORE" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: Published Live ✅" >> $GITHUB_STEP_SUMMARY
+          echo "- **Theme ID**: ${{ steps.get-theme.outputs.theme_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Theme Name**: ${{ steps.get-theme.outputs.theme_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run Number**: ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Clean up old themes (optional)
+        env:
+          SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_PRODUCTION_TOKEN }}
+          SHOPIFY_STORE: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}
+        run: |
+          echo "Cleaning up old deploy themes (keeping last 5)..."
+          
+          # Get all unpublished deploy themes sorted by ID (newest first)
+          OLD_THEMES=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r '.[] | select(.role == "unpublished" and (.name | startswith("deploy-"))) | .id' | sort -nr | tail -n +6)
+          
+          if [ -n "$OLD_THEMES" ]; then
+            echo "Deleting old themes:"
+            for theme_id in $OLD_THEMES; do
+              echo "Deleting theme ID: $theme_id"
+              shopify theme delete --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --theme=$theme_id --force || echo "Failed to delete theme $theme_id"
+            done
+          else
+            echo "No old themes to delete"
+          fi
