@@ -57,9 +57,11 @@ jobs:
           echo "Theme successfully deployed and published live on staging store"
 
       - name: Create deployment summary
+        env:
+          STAGING_STORE: ${{ secrets.SHOPIFY_STAGING_STORE }}
         run: |
           echo "## 🚀 Staging Deployment Complete" >> $GITHUB_STEP_SUMMARY
-          echo "- **Store**: ${{ secrets.SHOPIFY_STAGING_STORE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Store**: $STAGING_STORE" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: Published Live ✅" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
@@ -72,14 +74,15 @@ jobs:
     if: success()
     environment: 
       name: qa-approval
-      url: https://${{ secrets.SHOPIFY_STAGING_STORE }}
     
     steps:
       - name: QA Review Required
+        env:
+          STAGING_STORE: ${{ secrets.SHOPIFY_STAGING_STORE }}
         run: |
           echo "## 🔍 QA Review Required" >> $GITHUB_STEP_SUMMARY
           echo "Please review the staging deployment and approve for production." >> $GITHUB_STEP_SUMMARY
-          echo "- **Staging URL**: https://${{ secrets.SHOPIFY_STAGING_STORE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Staging URL**: https://$STAGING_STORE" >> $GITHUB_STEP_SUMMARY
           echo "- **Review checklist**:" >> $GITHUB_STEP_SUMMARY
           echo "  - [ ] Visual elements display correctly" >> $GITHUB_STEP_SUMMARY
           echo "  - [ ] Functionality works as expected" >> $GITHUB_STEP_SUMMARY
@@ -136,9 +139,11 @@ jobs:
           echo "Theme ID: $THEME_ID"
 
       - name: Create deployment summary
+        env:
+          PRODUCTION_STORE: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}
         run: |
           echo "## 📦 Production Push Complete" >> $GITHUB_STEP_SUMMARY
-          echo "- **Store**: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Store**: $PRODUCTION_STORE" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: Pushed (Unpublished) ⏳" >> $GITHUB_STEP_SUMMARY
           echo "- **Theme ID**: ${{ steps.theme-info.outputs.theme_id }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Next Step**: Awaiting approval to publish live" >> $GITHUB_STEP_SUMMARY
@@ -151,15 +156,16 @@ jobs:
     if: success()
     environment:
       name: production-publish
-      url: https://${{ secrets.SHOPIFY_PRODUCTION_STORE }}
     
     steps:
       - name: Production Publish Approval Required
+        env:
+          PRODUCTION_STORE: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}
         run: |
           echo "## ⚠️ Production Publish Approval Required" >> $GITHUB_STEP_SUMMARY
           echo "Theme has been pushed to production store but is not yet live." >> $GITHUB_STEP_SUMMARY
           echo "Please review and approve to publish the theme live on production." >> $GITHUB_STEP_SUMMARY
-          echo "- **Production Store**: https://${{ secrets.SHOPIFY_PRODUCTION_STORE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Production Store**: https://$PRODUCTION_STORE" >> $GITHUB_STEP_SUMMARY
 
   # Job 5: Publish Theme Live on Production
   publish-production:
@@ -203,12 +209,14 @@ jobs:
           echo "Theme successfully published live on production store!"
 
       - name: Create final deployment summary
+        env:
+          PRODUCTION_STORE: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}
         run: |
           echo "## 🎉 Production Deployment Complete!" >> $GITHUB_STEP_SUMMARY
-          echo "- **Store**: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Store**: $PRODUCTION_STORE" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: Published Live ✅" >> $GITHUB_STEP_SUMMARY
           echo "- **Theme ID**: ${{ steps.get-theme.outputs.theme_id }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Live URL**: https://${{ secrets.SHOPIFY_PRODUCTION_STORE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Live URL**: https://$PRODUCTION_STORE" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify deployment success
         run: |
