@@ -53,7 +53,7 @@ jobs:
           SHOPIFY_STORE: ${{ secrets.SHOPIFY_STAGING_STORE }}
         run: |
           echo "Deploying theme to staging store..."
-          shopify theme push --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --live --force
+          shopify theme push --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --live --allow-live --force
           echo "Theme successfully deployed and published live on staging store"
 
       - name: Create deployment summary
@@ -205,7 +205,7 @@ jobs:
           SHOPIFY_STORE: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}
         run: |
           echo "Publishing theme live on production store..."
-          shopify theme publish --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --theme=${{ steps.get-theme.outputs.theme_id }}
+          shopify theme publish --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --theme=${{ steps.get-theme.outputs.theme_id }} --force
           echo "Theme successfully published live on production store!"
 
       - name: Create final deployment summary
