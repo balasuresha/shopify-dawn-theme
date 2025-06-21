@@ -55,17 +55,21 @@ jobs:
           echo "Deploying theme to staging store..."
           THEME_NAME="staging-deploy-$(date +%Y-%B-%d)-${{ github.run_number }}"
           echo "Theme name: $THEME_NAME"
-          shopify theme push --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --theme="$THEME_NAME" --allow-live --force
-          echo "Theme successfully deployed with name: $THEME_NAME"
           
-          # Publish the theme live
+          # Push theme as unpublished first with custom name
+          shopify theme push --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --unpublished --theme="$THEME_NAME" --force
+          echo "Theme successfully pushed with name: $THEME_NAME"
+          
+          # Get the theme ID
           THEME_ID=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r --arg name "$THEME_NAME" '.[] | select(.name == $name) | .id' | head -1)
           if [ -n "$THEME_ID" ]; then
-            echo "Publishing theme $THEME_ID live..."
+            echo "Found theme ID: $THEME_ID"
+            echo "Publishing theme live..."
             shopify theme publish --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --theme=$THEME_ID --force
             echo "Theme successfully published live on staging store"
           else
-            echo "Warning: Could not find theme ID to publish"
+            echo "Error: Could not find theme ID to publish"
+            exit 1
           fi
 
       - name: Create deployment summary
