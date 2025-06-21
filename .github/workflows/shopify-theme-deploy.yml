@@ -4,15 +4,6 @@ on:
   push:
     branches: [main, develop]
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'staging'
-        type: choice
-        options:
-          - staging
-          - production
 
 env:
   NODE_VERSION: '18'
@@ -22,7 +13,7 @@ jobs:
   deploy-staging:
     name: Deploy to Staging & Publish Live
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
     environment: staging
     
     steps:
@@ -84,34 +75,11 @@ jobs:
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
 
-  # Job 2: QA Approval Gate
-  qa-approval:
-    name: QA Approval for Production
-    runs-on: ubuntu-latest
-    needs: deploy-staging
-    if: success()
-    environment: 
-      name: qa-approval
-    
-    steps:
-      - name: QA Review Required
-        env:
-          STAGING_STORE: ${{ secrets.SHOPIFY_STAGING_STORE }}
-        run: |
-          echo "## 🔍 QA Review Required" >> $GITHUB_STEP_SUMMARY
-          echo "Please review the staging deployment and approve for production." >> $GITHUB_STEP_SUMMARY
-          echo "- **Staging URL**: https://$STAGING_STORE" >> $GITHUB_STEP_SUMMARY
-          echo "- **Review checklist**:" >> $GITHUB_STEP_SUMMARY
-          echo "  - [ ] Visual elements display correctly" >> $GITHUB_STEP_SUMMARY
-          echo "  - [ ] Functionality works as expected" >> $GITHUB_STEP_SUMMARY
-          echo "  - [ ] Mobile responsiveness verified" >> $GITHUB_STEP_SUMMARY
-          echo "  - [ ] Performance is acceptable" >> $GITHUB_STEP_SUMMARY
-
-  # Job 3: Deploy to Production Store (Push Only)
+  # Job 2: Deploy to Production Store (Push Only)
   deploy-production-push:
     name: Push to Production Store
     runs-on: ubuntu-latest
-    needs: qa-approval
+    needs: deploy-staging
     if: success()
     environment: production-push
     
@@ -191,7 +159,7 @@ jobs:
           echo "- **Theme Name**: ${{ steps.theme-info.outputs.theme_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Next Step**: Awaiting approval to publish live" >> $GITHUB_STEP_SUMMARY
 
-  # Job 4: Production Publish Approval Gate
+  # Job 3: Production Publish Approval Gate
   production-publish-approval:
     name: Production Publish Approval
     runs-on: ubuntu-latest
@@ -210,7 +178,7 @@ jobs:
           echo "Please review and approve to publish the theme live on production." >> $GITHUB_STEP_SUMMARY
           echo "- **Production Store**: https://$PRODUCTION_STORE" >> $GITHUB_STEP_SUMMARY
 
- # Job 5: Publish Theme Live on Production
+  # Job 4: Publish Theme Live on Production
   publish-production:
     name: Publish Live on Production
     runs-on: ubuntu-latest
@@ -271,7 +239,6 @@ jobs:
           echo "All unpublished deploy themes (sorted by ID descending):"
           shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r '.[] | select(.role == "unpublished" and (.name | startswith("deploy-"))) | "\(.id): \(.name)"' | sort -nr
 
-      # THIS IS THE MISSING STEP - ACTUALLY PUBLISH THE THEME
       - name: Publish theme live
         env:
           SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_PRODUCTION_TOKEN }}
