@@ -154,15 +154,31 @@ jobs:
           SHOPIFY_STORE: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}
         run: |
           THEME_NAME="deploy-$(date +%Y%m%d-%H%M%S)-${{ github.run_number }}"
+          
+          # Wait a moment for theme to be available in the list
+          sleep 5
+          
+          # Try to find the theme by name first
           THEME_ID=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r --arg name "$THEME_NAME" '.[] | select(.name == $name) | .id' | head -1)
+          
           if [ -z "$THEME_ID" ]; then
-            # Fallback: get the most recent unpublished theme
+            echo "Theme not found by name, searching for most recent unpublished theme with 'deploy-' prefix"
+            THEME_ID=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r '.[] | select(.role == "unpublished" and (.name | contains("deploy-"))) | .id' | head -1)
+          fi
+          
+          if [ -z "$THEME_ID" ]; then
+            echo "Still not found, getting the most recent unpublished theme"
             THEME_ID=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r '.[] | select(.role == "unpublished") | .id' | head -1)
           fi
+          
+          # Get the actual theme name
+          ACTUAL_THEME_NAME=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r --arg id "$THEME_ID" '.[] | select(.id == $id) | .name')
+          
           echo "theme_id=$THEME_ID" >> $GITHUB_OUTPUT
-          echo "theme_name=$THEME_NAME" >> $GITHUB_OUTPUT
+          echo "theme_name=$ACTUAL_THEME_NAME" >> $GITHUB_OUTPUT
           echo "Theme ID: $THEME_ID"
-          echo "Theme Name: $THEME_NAME"
+          echo "Expected Theme Name: $THEME_NAME"
+          echo "Actual Theme Name: $ACTUAL_THEME_NAME"
 
       - name: Create deployment summary
         env:
@@ -221,10 +237,26 @@ jobs:
           SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_PRODUCTION_TOKEN }}
           SHOPIFY_STORE: ${{ secrets.SHOPIFY_PRODUCTION_STORE }}
         run: |
-          # Get the most recent unpublished theme
-          THEME_ID=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r '.[] | select(.role == "unpublished") | .id' | head -1)
+          # Get the most recent unpublished theme that starts with "deploy-"
+          THEME_ID=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r '.[] | select(.role == "unpublished" and (.name | startswith("deploy-"))) | .id' | head -1)
+          
+          if [ -z "$THEME_ID" ]; then
+            echo "No unpublished deploy theme found, getting the most recent unpublished theme"
+            THEME_ID=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r '.[] | select(.role == "unpublished") | .id' | head -1)
+          fi
+          
+          if [ -z "$THEME_ID" ]; then
+            echo "Error: No unpublished theme found to publish"
+            exit 1
+          fi
+          
+          # Get theme name for verification
+          THEME_NAME=$(shopify theme list --store=$SHOPIFY_STORE --password=$SHOPIFY_CLI_THEME_TOKEN --json | jq -r --arg id "$THEME_ID" '.[] | select(.id == $id) | .name')
+          
           echo "theme_id=$THEME_ID" >> $GITHUB_OUTPUT
+          echo "theme_name=$THEME_NAME" >> $GITHUB_OUTPUT
           echo "Found theme ID: $THEME_ID"
+          echo "Theme name: $THEME_NAME"
 
       - name: Publish Theme Live
         env:
@@ -243,24 +275,10 @@ jobs:
           echo "- **Store**: $PRODUCTION_STORE" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: Published Live ✅" >> $GITHUB_STEP_SUMMARY
           echo "- **Theme ID**: ${{ steps.get-theme.outputs.theme_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Theme Name**: ${{ steps.get-theme.outputs.theme_name }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Live URL**: https://$PRODUCTION_STORE" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify deployment success
         run: |
           echo "🚀 Theme deployment pipeline completed successfully!"
           echo "Production store is now live with the latest theme."
-
-  # Cleanup job for failed deployments
-  cleanup-on-failure:
-    name: Cleanup on Failure
-    runs-on: ubuntu-latest
-    if: failure()
-    needs: [deploy-staging, qa-approval, deploy-production-push, production-publish-approval, publish-production]
-    
-    steps:
-      - name: Deployment failure notification
-        run: |
-          echo "## ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
-          echo "The deployment pipeline has failed. Please check the logs and retry." >> $GITHUB_STEP_SUMMARY
-          echo "- **Failed at**: $(date)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
